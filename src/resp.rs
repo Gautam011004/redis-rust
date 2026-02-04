@@ -1,9 +1,11 @@
 use core::panic;
-use std::{fmt::format, io::Read, net::TcpStream};
+use std::{fmt::format, io::Read};
 
 use anyhow::{Error, Ok, Result};
 use bytes::{BytesMut, buf};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpStream};
 
+#[derive(Clone)]
 pub enum Value{
     SimpleString(String),
     BulkString(String),
@@ -31,7 +33,7 @@ impl RespHandler {
     }
 
     pub async fn read_value(&mut self) -> Result<Option<Value>> {
-        let bytes_read = self.stream.read(&mut self.buffer).unwrap();
+        let bytes_read = self.stream.read_buf(&mut self.buffer).await?;
 
         if bytes_read == 0 {
             return Ok(None)
@@ -39,6 +41,10 @@ impl RespHandler {
 
         let (v, _) = parse_message(self.buffer.split())?;
         Ok(Some(v))
+    }
+    pub async fn write_value(&mut self, value: Value) -> Result<(), Error>{
+        self.stream.write_all(value.serialize().as_bytes()).await?;
+        Ok(())
     }
 }
 
