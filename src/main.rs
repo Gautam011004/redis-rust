@@ -86,8 +86,9 @@ async fn get_handle(args: &Vec<Value>, db: &db) -> Option<String> {
     }
 }
 async fn set_handle(args: &Vec<Value>, db: &db) -> Result<(), Error> {
-    let key_value = args[1].clone();
-    let value_value = args[2].clone();
+    let (key_value,
+        value_value, 
+        value_ttl) = (args[1].clone(),args[2].clone(), args[3].clone());
     let key = match key_value {
         Value::BulkString(s) => Some(s),
         _ => panic!("Wrong arrguments for a set command")
@@ -96,6 +97,10 @@ async fn set_handle(args: &Vec<Value>, db: &db) -> Result<(), Error> {
         Value::BulkString(s) => Some(s),
         _ => panic!("Wrong arrguments for a set command")
     }.unwrap();
-    db.set(&key, &value).await.unwrap();
+    let ttl = match value_ttl {
+        Value::BulkString(s) => Some(s),
+        _ => panic!("Wrong arrgument for set command")
+    }.unwrap();
+    db.set(key, &value, Some(ttl.parse::<u64>().unwrap())).await.unwrap();
     Ok(())
 }

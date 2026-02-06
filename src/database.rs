@@ -1,7 +1,7 @@
-use std::{collections::HashMap, sync::{Arc}};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::Error;
-use tokio::sync::Mutex;
+use tokio::{sync::Mutex, time::sleep};
 
 struct dbstate {
     kv: HashMap<String, String>
@@ -25,10 +25,19 @@ impl db {
         lock.kv.get(key).cloned()
     }
 
-    pub async fn set(&self, key: &str, value: &str) -> Result<(), Error>{
+    pub async fn set(&self, key: String, value: &str, ttl: Option<u64>) -> Result<(), Error>{
         let mut lock = self.state.lock().await;
 
-        lock.kv.insert(String::from(key), String::from(value));
+        lock.kv.insert(key.clone(), String::from(value));
+
+        let temp = self.clone();
+        if let Some(ttl) = ttl {
+            tokio::spawn(async move {
+                sleep(Duration::from_millis(ttl)).await;
+                let mut locking = temp.state.lock().await;
+                locking.kv.remove(&key);
+            });
+        }     
         Ok(())
-    }
+    } 
 }

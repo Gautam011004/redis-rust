@@ -97,7 +97,7 @@ fn parse_arrays(buffer: BytesMut) -> Result<(Value, usize)> {
     return Ok((Value::Array(items), bytes_consumed));
 }
 
-fn parse_int(buffer: &[u8]) -> Result<i64, Error>{
+pub fn parse_int(buffer: &[u8]) -> Result<i64, Error>{
     Ok(String::from_utf8(buffer.to_vec())?.parse::<i64>()?)
 }
 
