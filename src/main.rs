@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
 use core::panic;
-use std::collections::btree_map::Values;
+use std::{any, collections::btree_map::Values};
 
 use anyhow::{Error, Ok};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}};
@@ -39,8 +39,11 @@ async fn handle_connection(mut socket: TcpStream, redisdb: db) {
                     Value::SimpleString("OK".to_string())
                 }
                 "GET" => {
-                    let value = get_handle(&args, &redisdb).await.unwrap();
-                    Value::SimpleString(value)
+                    if let Some(value) = get_handle(&args, &redisdb).await {
+                        Value::SimpleString(value)
+                    } else {
+                        Value::NullBulkString
+                    }
                 }
                 c => panic!("Cannot handle command {:?}",c)
             }
@@ -69,14 +72,18 @@ fn unpack_bulk_str(value: Value) -> Result<String, Error> {
         _ => Err(anyhow::anyhow!("Unexpected command for a bulkstring"))
     }
 }
-async fn get_handle(args: &Vec<Value>, db: &db) -> Result<String, Error> {
+async fn get_handle(args: &Vec<Value>, db: &db) -> Option<String> {
     let key_value = args[1].clone();
     let key = match key_value {
         Value::BulkString(s) => Some(s),
         _ => panic!("Wrong arrguments for a get command")
     }.unwrap();
-    let value = db.get(&key).await.unwrap();
-    Ok(value)
+    let value = db.get(&key).await;
+    if let Some(value) = value {
+        return Some(value)
+    } else {
+        None
+    }
 }
 async fn set_handle(args: &Vec<Value>, db: &db) -> Result<(), Error> {
     let key_value = args[1].clone();

@@ -9,6 +9,7 @@ use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpStream};
 pub enum Value{
     SimpleString(String),
     BulkString(String),
+    NullBulkString,
     Array(Vec<Value>)
 }
 
@@ -17,6 +18,7 @@ impl Value {
         match self {
             Value::SimpleString(s) => format!("+{}\r\n",s),
             Value::BulkString(s) => format!("${}\r\n{}",s.chars().count(),s),
+            Value::NullBulkString => format!("$-1\r\n"),
             _ => panic!("Unsupported value for serialized")
         }
     }
