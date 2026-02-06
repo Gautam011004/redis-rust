@@ -4,6 +4,9 @@ use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}};
 
 use crate::resp::Value;
 pub mod resp;
+pub mod db;
+
+
 #[tokio::main]
 async fn main() {
     let listener = TcpListener::bind("127.0.0.1:6379").await.unwrap();
@@ -26,6 +29,7 @@ async fn handle_connection(mut socket: TcpStream) {
             match command.as_str() {
                 "ping" => Value::SimpleString("PONG".to_string()),
                 "echo" => args.first().unwrap().clone(),
+                "SET" => Value::SimpleString("OK".to_string()),
                 c => panic!("Cannot handle command {:?}",c)
             }
         }
