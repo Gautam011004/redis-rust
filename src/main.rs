@@ -28,12 +28,13 @@ async fn handle_connection(mut socket: TcpStream, redisdb: db) {
 
     loop {
         let value = handler.read_value().await.unwrap();
-
+        println!("{:?}",value);
         let response = if let Some(v) = value {
             let (command, args) = extract_command(v).unwrap();
+            println!("{:?} {:?}", command, args);
             match command.as_str() {
                 "ping" => Value::SimpleString("PONG".to_string()),
-                "echo" => args.first().unwrap().clone(),
+                "echo" => args[0].clone(),
                 "SET" => {
                     set_handle(&args, &redisdb).await.unwrap();
                     Value::SimpleString("OK".to_string())
@@ -44,6 +45,9 @@ async fn handle_connection(mut socket: TcpStream, redisdb: db) {
                     } else {
                         Value::NullBulkString
                     }
+                }
+                "RPUSH" => {
+                    Value::Integer(1)
                 }
                 c => panic!("Cannot handle command {:?}",c)
             }
@@ -73,7 +77,7 @@ fn unpack_bulk_str(value: Value) -> Result<String, Error> {
     }
 }
 async fn get_handle(args: &Vec<Value>, db: &db) -> Option<String> {
-    let key_value = args[1].clone();
+    let key_value = args[0].clone();
     let key = match key_value {
         Value::BulkString(s) => Some(s),
         _ => panic!("Wrong arrguments for a get command")
@@ -87,8 +91,7 @@ async fn get_handle(args: &Vec<Value>, db: &db) -> Option<String> {
 }
 async fn set_handle(args: &Vec<Value>, db: &db) -> Result<(), Error> {
     let (key_value,
-        value_value, 
-        value_ttl) = (args[1].clone(),args[2].clone(), args[3].clone());
+        value_value) = (args[0].clone(),args[1].clone());
     let key = match key_value {
         Value::BulkString(s) => Some(s),
         _ => panic!("Wrong arrguments for a set command")
@@ -97,10 +100,21 @@ async fn set_handle(args: &Vec<Value>, db: &db) -> Result<(), Error> {
         Value::BulkString(s) => Some(s),
         _ => panic!("Wrong arrguments for a set command")
     }.unwrap();
-    let ttl = match value_ttl {
-        Value::BulkString(s) => Some(s),
-        _ => panic!("Wrong arrgument for set command")
-    }.unwrap();
-    db.set(key, &value, Some(ttl.parse::<u64>().unwrap())).await.unwrap();
+    let ttl = if args.len() == 3 {
+        let value_ttl = args[2].clone();
+        match value_ttl {
+            Value::BulkString(s) => Some(s),
+            _ => panic!("Wrong argument for set command"),
+        }
+    } else {
+        None
+    };
+
+    let s = if ttl.is_some() {
+        Some(ttl.unwrap().parse::<u64>().unwrap())
+    } else {
+        None
+    };
+    db.set(key, &value, s).await.unwrap();
     Ok(())
 }

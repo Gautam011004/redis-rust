@@ -5,20 +5,22 @@ use anyhow::{Error, Ok, Result};
 use bytes::{BytesMut, buf};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpStream};
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub enum Value{
     SimpleString(String),
     BulkString(String),
     NullBulkString,
-    Array(Vec<Value>)
+    Array(Vec<Value>),
+    Integer(u32)
 }
 
 impl Value {
     pub fn serialize(&self) -> String {
         match self {
             Value::SimpleString(s) => format!("+{}\r\n",s),
-            Value::BulkString(s) => format!("${}\r\n{}",s.chars().count(),s),
+            Value::BulkString(s) => format!("${}\r\n{}\r\n",s.chars().count(),s),
             Value::NullBulkString => format!("$-1\r\n"),
+            Value::Integer(s) => format!(":{}\r\n", s),
             _ => panic!("Unsupported value for serialized")
         }
     }
@@ -77,7 +79,7 @@ fn parse_bulk_strings(buffer: BytesMut) -> Result<(Value, usize)> {
         };
     let end_of_bulk_str = string_length as usize + bytes_consumed ;
     let total_parsed = end_of_bulk_str + 2;
-    Ok((Value::BulkString(String::from_utf8(buffer[bytes_consumed..=end_of_bulk_str].to_vec())?), total_parsed))
+    Ok((Value::BulkString(String::from_utf8(buffer[bytes_consumed..end_of_bulk_str].to_vec())?), total_parsed))
     
 }
 
