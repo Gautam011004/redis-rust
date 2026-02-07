@@ -133,7 +133,14 @@ pub async fn rpush_handle(args: &Vec<Value>, db: &db) -> Result<u32, Error> {
     }.unwrap();
     let mut lock = db.state.lock().await;
     let mut v = Vec::new();
-    v.push(value);
-    lock.lists.insert(key, v.clone());
-    Ok(v.len() as u32)
+    let v = if lock.lists.get(&key).is_some() {
+        let list = lock.lists.get_mut(&key).unwrap();
+        list.push(value);
+        list.len()
+    } else {
+        v.push(value);
+        lock.lists.insert(key, v.clone());
+        v.len()
+    };
+    Ok(v as u32)
 }
