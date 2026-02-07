@@ -3,19 +3,20 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use anyhow::Error;
 use tokio::{sync::Mutex, time::sleep};
 
-struct dbstate {
-    kv: HashMap<String, String>
+pub struct dbstate {
+    pub kv: HashMap<String, String>,
+    pub lists: HashMap<String, Vec<String>>
 }
 
 #[derive(Clone)]
 pub struct db {
-    state: Arc<Mutex<dbstate>>
+    pub state: Arc<Mutex<dbstate>>
 }
 
 impl db {
     pub fn new() -> Self {
         Self {
-            state: Arc::new(Mutex::new(dbstate { kv: HashMap::new() }))
+            state: Arc::new(Mutex::new(dbstate { kv: HashMap::new(), lists: HashMap::new() }))
         }
     }
 

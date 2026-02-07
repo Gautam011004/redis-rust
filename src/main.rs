@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
 use core::panic;
-use std::{any, collections::btree_map::Values};
+use std::{any, collections::btree_map::Values, env::args_os};
 
 use anyhow::{Error, Ok};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}};
@@ -47,7 +47,8 @@ async fn handle_connection(mut socket: TcpStream, redisdb: db) {
                     }
                 }
                 "RPUSH" => {
-                    Value::Integer(1)
+                    let size = rpush_handle(&args, &redisdb).await.unwrap();
+                    Value::Integer(size)
                 }
                 c => panic!("Cannot handle command {:?}",c)
             }
@@ -117,4 +118,22 @@ async fn set_handle(args: &Vec<Value>, db: &db) -> Result<(), Error> {
     };
     db.set(key, &value, s).await.unwrap();
     Ok(())
+}
+
+pub async fn rpush_handle(args: &Vec<Value>, db: &db) -> Result<u32, Error> {
+    let (list_key, 
+        list_value) = (args[0].clone(),args[1].clone());
+    let key = match list_key {
+        Value::BulkString(s) => Some(s),
+        _ => panic!("Wrong arrguments for a rpush command")
+    }.unwrap();
+    let value = match list_value {
+        Value::BulkString(s) => Some(s),
+        _ => panic!("Wrong arrguments for a rpush command")
+    }.unwrap();
+    let mut lock = db.state.lock().await;
+    let mut v = Vec::new();
+    v.push(value);
+    lock.lists.insert(key, v.clone());
+    Ok(v.len() as u32)
 }
