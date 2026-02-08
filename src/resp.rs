@@ -11,7 +11,8 @@ pub enum Value{
     BulkString(String),
     NullBulkString,
     Array(Vec<Value>),
-    Integer(u32)
+    Integer(u32),
+    EmptyArray
 }
 
 impl Value {
@@ -21,6 +22,14 @@ impl Value {
             Value::BulkString(s) => format!("${}\r\n{}\r\n",s.chars().count(),s),
             Value::NullBulkString => format!("$-1\r\n"),
             Value::Integer(s) => format!(":{}\r\n", s),
+            Value::Array(s) => {
+                let mut v =  String::new();
+                for i in 0..s.len(){
+                    v.push_str(&s[i].serialize());
+                }
+                format!("*{}\r\n{}",s.len(),v)
+            },
+            Value::EmptyArray => format!("*0\r\n"),
             _ => panic!("Unsupported value for serialized")
         }
     }
