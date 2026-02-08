@@ -121,24 +121,27 @@ async fn set_handle(args: &Vec<Value>, db: &db) -> Result<(), Error> {
 }
 
 pub async fn rpush_handle(args: &Vec<Value>, db: &db) -> Result<u32, Error> {
-    let (list_key, 
-        list_value) = (args[0].clone(),args[1].clone());
+    let list_key = args[0].clone();
+    let mut list_values = Vec::new();
+    for i in 1..args.len() {
+        let v = match args[i].clone() {
+            Value::BulkString(s) => s,
+            _ => panic!("Wrong argument for rpush command")
+        };
+        list_values.push(v);
+    }
     let key = match list_key {
-        Value::BulkString(s) => Some(s),
+        Value::BulkString(s) => s,
         _ => panic!("Wrong arrguments for a rpush command")
-    }.unwrap();
-    let value = match list_value {
-        Value::BulkString(s) => Some(s),
-        _ => panic!("Wrong arrguments for a rpush command")
-    }.unwrap();
+    };
     let mut lock = db.state.lock().await;
     let mut v = Vec::new();
     let v = if lock.lists.get(&key).is_some() {
         let list = lock.lists.get_mut(&key).unwrap();
-        list.push(value);
+        list.append(&mut list_values);
         list.len()
     } else {
-        v.push(value);
+        v.append(&mut list_values);
         lock.lists.insert(key, v.clone());
         v.len()
     };
