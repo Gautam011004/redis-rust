@@ -75,19 +75,23 @@ pub async fn rpush_handle(vec_args: &Vec<Value>, db: &db) -> Result<u32, Error> 
 
 pub async fn lrange_handle(vec_args: &Vec<Value>, db: &db) -> Result<Value, Error> {
     let args = unpack_bulk_str(vec_args).unwrap();
-    let start = args[1].parse::<usize>().unwrap();
-    let end = args[2].parse::<usize>().unwrap();
     let lock = db.state.lock().await;
     let list = lock.lists.get(&args[0]);
+    let start = args[1].parse::<isize>().unwrap();
+    let end = args[2].parse::<isize>().unwrap();
     match list {
         Some(list) => {
-            if start > end || start > list.len()  {
+            let len = list.len() as isize;
+            let norm = |i: isize|({ i + len }).max(0);
+            let s = if start >= 0 { start } else { norm(end) };
+            let e = if end > 0 { end } else { norm(start) };
+            if s > e {
                 return Ok(Value::EmptyArray)
             } else {
                 let list = list;
                 let mut v= Vec::new();
-                for i  in start..=end {
-                    v.push(Value::BulkString(list[i].clone()));
+                for i  in s..=e {
+                    v.push(Value::BulkString(list[i as usize].clone()));
                 }
                 return Ok(Value::Array(v))
             }
