@@ -83,8 +83,8 @@ pub async fn lrange_handle(vec_args: &Vec<Value>, db: &db) -> Result<Value, Erro
         Some(list) => {
             let len = list.len() as isize;
             let norm = |i: isize|({ i + len }).max(0);
-            let s = if start >= 0 { start } else { norm(end) };
-            let e = if end > 0 { end } else { norm(start) };
+            let s = if start >= 0 { start } else { norm(start) };
+            let e = if end > 0 { end } else { norm(end) };
             if s > e {
                 return Ok(Value::EmptyArray)
             } else {
@@ -122,4 +122,35 @@ pub async fn lpush_handle(vec_args: &Vec<Value>, db: &db) -> Result<u32, Error> 
         v.len()
     };
     Ok(v as u32)
+}
+pub async fn llen_handle(vec_args: &Vec<Value>, db: &db) -> Result<u32, Error> {
+    let args = unpack_bulk_str(vec_args).unwrap();
+    let key = args[0].clone();
+    let lock = db.state.lock().await;
+    let list = lock.lists.get(&key);
+    let len = match list {
+        Some(list) => {
+            list.len()
+        }
+        None => 0
+    };
+    Ok(len as u32)
+}
+pub async fn lpop_handle(vec_args: &Vec<Value>, db: &db) -> Result<Value, Error> {
+    let args = unpack_bulk_str(vec_args).unwrap();
+    let key = args[0].clone();
+    let mut lock = db.state.lock().await;
+    let list = lock.lists.get_mut(&key);
+    let v: Value = match list {
+        Some(list) => {
+            let len = list.len();
+            if len == 0 { Value::NullBulkString } 
+            else {
+                let u = list.remove(0);
+                Value::BulkString(u)
+            }
+        }
+        None => Value::NullBulkString
+    };
+    Ok(v)
 }
