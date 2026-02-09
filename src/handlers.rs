@@ -138,16 +138,25 @@ pub async fn llen_handle(vec_args: &Vec<Value>, db: &db) -> Result<u32, Error> {
 }
 pub async fn lpop_handle(vec_args: &Vec<Value>, db: &db) -> Result<Value, Error> {
     let args = unpack_bulk_str(vec_args).unwrap();
+    let args_len = args.len();
     let key = args[0].clone();
+    let element_count = if args_len > 1 { args[1].clone().parse::<usize>().unwrap() } else { 0 };
     let mut lock = db.state.lock().await;
     let list = lock.lists.get_mut(&key);
     let v: Value = match list {
         Some(list) => {
             let len = list.len();
-            if len == 0 { Value::NullBulkString } 
-            else {
-                let u = list.remove(0);
-                Value::BulkString(u)
+            if len == 0 { Value::NullBulkString }
+            else { 
+                if element_count == 0 {
+                    Value::BulkString(list.remove(0))
+                } else {
+                    let mut s = Vec::new();
+                    for _ in 0..element_count {
+                        s.push(Value::BulkString(list.remove(0)));
+                    }
+                    Value::Array(s)
+                }
             }
         }
         None => Value::NullBulkString
