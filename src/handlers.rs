@@ -101,3 +101,25 @@ pub async fn lrange_handle(vec_args: &Vec<Value>, db: &db) -> Result<Value, Erro
         }
     }
 }
+
+pub async fn lpush_handle(vec_args: &Vec<Value>, db: &db) -> Result<u32, Error> {
+    let args = unpack_bulk_str(vec_args).unwrap();
+    let key = args[0].clone();
+    let len = args.len();
+    let mut list_values: Vec<String> = Vec::new();
+    for i in 1..args.len() {
+        list_values.push(args[len - i].clone());
+    }
+    let mut lock = db.state.lock().await;
+    let mut v = Vec::new();
+    let v = if lock.lists.get(&key).is_some() {
+        let list = lock.lists.get_mut(&key).unwrap();
+        list.append(&mut list_values);
+        list.len()
+    } else {
+        v.append(&mut list_values);
+        lock.lists.insert(key, v.clone());
+        v.len()
+    };
+    Ok(v as u32)
+}

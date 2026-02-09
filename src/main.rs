@@ -5,7 +5,7 @@ use std::{any, collections::btree_map::Values, env::args_os};
 use anyhow::{Error, Ok};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}};
 
-use crate::{database::db, handlers::{extract_command, get_handle, lrange_handle, rpush_handle, set_handle}, resp::Value};
+use crate::{database::db, handlers::{extract_command, get_handle, lpush_handle, lrange_handle, rpush_handle, set_handle}, resp::Value};
 pub mod resp;
 pub mod database;
 pub mod handlers;
@@ -54,6 +54,10 @@ async fn handle_connection(mut socket: TcpStream, redisdb: db) {
                 "LRANGE" => {
                     let range = lrange_handle(&args, &redisdb).await.unwrap();
                     range
+                }
+                "LPUSH" => {
+                    let size = lpush_handle(&args, &redisdb).await.unwrap();
+                    Value::Integer(size)
                 }
                 c => panic!("Cannot handle command {:?}",c)
             }
