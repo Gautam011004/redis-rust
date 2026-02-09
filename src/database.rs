@@ -26,7 +26,7 @@ impl db {
         lock.kv.get(key).cloned()
     }
 
-    pub async fn set(&self, key: String, value: &str, ttl: Option<u64>) -> Result<(), Error>{
+    pub async fn set(&self, key: String, value: String, ttl: Option<u64>) -> Result<(), Error>{
         let mut lock = self.state.lock().await;
 
         lock.kv.insert(key.clone(), String::from(value));
