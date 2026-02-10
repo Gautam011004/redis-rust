@@ -5,7 +5,7 @@ use std::{any, collections::btree_map::Values, env::args_os};
 use anyhow::{Error, Ok};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}};
 
-use crate::{database::db, handlers::{extract_command, get_handle, llen_handle, lpop_handle, lpush_handle, lrange_handle, rpush_handle, set_handle}, resp::Value};
+use crate::{database::db, handlers::{extract_command, get_handle, llen_handle, lpop_handle, lpush_handle, lrange_handle, rpush_handle, set_handle, unpack_bulk_str}, resp::Value};
 pub mod resp;
 pub mod database;
 pub mod handlers;
@@ -31,11 +31,12 @@ async fn handle_connection(mut socket: TcpStream, redisdb: db) {
         let value = handler.read_value().await.unwrap();
         println!("{:?}",value);
         let response = if let Some(v) = value {
-            let (command, args) = extract_command(v).unwrap();
+            let (command, vec_args) = extract_command(v).unwrap();
+            let args = unpack_bulk_str(&vec_args).unwrap();
             println!("{:?} {:?}", command, args);
             match command.as_str() {
                 "ping" => Value::SimpleString("PONG".to_string()),
-                "echo" => args[0].clone(),
+                "echo" => Value::BulkString(args[0].clone()),
                 "SET" => {
                     set_handle(&args, &redisdb).await.unwrap();
                     Value::SimpleString("OK".to_string())

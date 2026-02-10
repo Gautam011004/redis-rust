@@ -27,8 +27,7 @@ pub fn unpack_bulk_str(value: &Vec<Value>) -> Result<Vec<String>, Error> {
     }
     Ok(bulk_strings)
 }
-pub async fn get_handle(vec_args: &Vec<Value>, db: &db) -> Option<String> {
-    let args = unpack_bulk_str(vec_args).unwrap();
+pub async fn get_handle(args: &Vec<String>, db: &db) -> Option<String> {
     let value = db.get(&args[0]).await;
     if let Some(value) = value {
         return Some(value)
@@ -36,8 +35,7 @@ pub async fn get_handle(vec_args: &Vec<Value>, db: &db) -> Option<String> {
         None
     }
 }
-pub async fn set_handle(vec_args: &Vec<Value>, db: &db) -> Result<(), Error> {
-    let args = unpack_bulk_str(vec_args).unwrap();
+pub async fn set_handle(args: &Vec<String>, db: &db) -> Result<(), Error> {
     let ttl = if args.len() == 3 {
         Some(args[2].clone())
     } else {
@@ -52,8 +50,7 @@ pub async fn set_handle(vec_args: &Vec<Value>, db: &db) -> Result<(), Error> {
     Ok(())
 }
 
-pub async fn rpush_handle(vec_args: &Vec<Value>, db: &db) -> Result<u32, Error> {
-    let args = unpack_bulk_str(vec_args).unwrap();
+pub async fn rpush_handle(args: &Vec<String>, db: &db) -> Result<u32, Error> {
     let key = args[0].clone();
     let mut list_values: Vec<String> = Vec::new();
     for i in 1..args.len() {
@@ -73,8 +70,7 @@ pub async fn rpush_handle(vec_args: &Vec<Value>, db: &db) -> Result<u32, Error> 
     Ok(v as u32)
 }
 
-pub async fn lrange_handle(vec_args: &Vec<Value>, db: &db) -> Result<Value, Error> {
-    let args = unpack_bulk_str(vec_args).unwrap();
+pub async fn lrange_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     let lock = db.state.lock().await;
     let list = lock.lists.get(&args[0]);
     let start = args[1].parse::<isize>().unwrap();
@@ -102,8 +98,7 @@ pub async fn lrange_handle(vec_args: &Vec<Value>, db: &db) -> Result<Value, Erro
     }
 }
 
-pub async fn lpush_handle(vec_args: &Vec<Value>, db: &db) -> Result<u32, Error> {
-    let args = unpack_bulk_str(vec_args).unwrap();
+pub async fn lpush_handle(args: &Vec<String>, db: &db) -> Result<u32, Error> {
     let key = args[0].clone();
     let len = args.len();
     let mut list_values: Vec<String> = Vec::new();
@@ -123,8 +118,7 @@ pub async fn lpush_handle(vec_args: &Vec<Value>, db: &db) -> Result<u32, Error> 
     };
     Ok(v as u32)
 }
-pub async fn llen_handle(vec_args: &Vec<Value>, db: &db) -> Result<u32, Error> {
-    let args = unpack_bulk_str(vec_args).unwrap();
+pub async fn llen_handle(args: &Vec<String>, db: &db) -> Result<u32, Error> {
     let key = args[0].clone();
     let lock = db.state.lock().await;
     let list = lock.lists.get(&key);
@@ -136,8 +130,7 @@ pub async fn llen_handle(vec_args: &Vec<Value>, db: &db) -> Result<u32, Error> {
     };
     Ok(len as u32)
 }
-pub async fn lpop_handle(vec_args: &Vec<Value>, db: &db) -> Result<Value, Error> {
-    let args = unpack_bulk_str(vec_args).unwrap();
+pub async fn lpop_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     let args_len = args.len();
     let key = args[0].clone();
     let element_count = if args_len > 1 { args[1].clone().parse::<usize>().unwrap() } else { 0 };
