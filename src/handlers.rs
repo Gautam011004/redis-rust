@@ -1,5 +1,5 @@
 use core::{f64, panic, time};
-use std::vec;
+use std::{collections::HashMap, vec};
 
 use anyhow::{Error, Ok};
 
@@ -208,8 +208,23 @@ pub async fn type_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
             key_value::String(_) => {
                 Value::SimpleString("string".to_string())
             }
+            key_value::Stream(_) => {
+                Value::SimpleString("stream".to_string())
+            }
         }
         None => Value::SimpleString("none".to_string())
     };
     Ok(s)
+}
+pub async fn xadd_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
+    let key = args[0].clone();
+    let id = args[1].clone();
+    let len = args.len();
+    let mut lock = db.state.lock().await;
+    let mut s = HashMap::new();
+    for i in (2..len).step_by(2) {
+        s.insert(args[i].clone(), args[i+1].clone());
+    }
+    lock.kv.insert(key, key_value::Stream((id.clone(), s)));
+    Ok(Value::BulkString(id))
 }

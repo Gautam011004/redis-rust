@@ -7,7 +7,8 @@ use tokio::{sync::Mutex, time::sleep};
 #[derive(Clone)]
 pub enum key_value {
     String(String),
-    List(Vec<String>)
+    List(Vec<String>),
+    Stream((String, HashMap<String, String>))
 }
 pub struct dbstate {
     pub kv: HashMap<String, key_value>,

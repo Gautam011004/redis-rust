@@ -5,7 +5,7 @@ use std::{any, collections::btree_map::Values, env::args_os};
 use anyhow::{Error, Ok};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}};
 
-use crate::{database::db, handlers::{blpop_handle, extract_command, get_handle, llen_handle, lpop_handle, lpush_handle, lrange_handle, rpush_handle, set_handle, type_handle, unpack_bulk_str}, resp::Value};
+use crate::{database::db, handlers::{blpop_handle, extract_command, get_handle, llen_handle, lpop_handle, lpush_handle, lrange_handle, rpush_handle, set_handle, type_handle, unpack_bulk_str, xadd_handle}, resp::Value};
 pub mod resp;
 pub mod database;
 pub mod handlers;
@@ -68,6 +68,9 @@ async fn handle_connection(mut socket: TcpStream, redisdb: db) {
                 }
                 "TYPE" => {
                     type_handle(&args, &redisdb).await.unwrap()
+                }
+                "XADD" => {
+                    xadd_handle(&args, &redisdb).await.unwrap()
                 }
                 c => panic!("Cannot handle command {:?}",c)
             }
