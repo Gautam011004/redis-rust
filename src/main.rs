@@ -5,7 +5,7 @@ use std::{any, collections::btree_map::Values, env::args_os};
 use anyhow::{Error, Ok};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}};
 
-use crate::{database::db, handlers::{extract_command, get_handle, llen_handle, lpop_handle, lpush_handle, lrange_handle, rpush_handle, set_handle, unpack_bulk_str}, resp::Value};
+use crate::{database::db, handlers::{blpop_handle, extract_command, get_handle, llen_handle, lpop_handle, lpush_handle, lrange_handle, rpush_handle, set_handle, unpack_bulk_str}, resp::Value};
 pub mod resp;
 pub mod database;
 pub mod handlers;
@@ -49,24 +49,22 @@ async fn handle_connection(mut socket: TcpStream, redisdb: db) {
                     }
                 }
                 "RPUSH" => {
-                    let size = rpush_handle(&args, &redisdb).await.unwrap();
-                    Value::Integer(size)
+                    rpush_handle(&args, &redisdb).await.unwrap()
                 }
                 "LRANGE" => {
-                    let range = lrange_handle(&args, &redisdb).await.unwrap();
-                    range
+                    lrange_handle(&args, &redisdb).await.unwrap()
                 }
                 "LPUSH" => {
-                    let size = lpush_handle(&args, &redisdb).await.unwrap();
-                    Value::Integer(size)
+                    lpush_handle(&args, &redisdb).await.unwrap()
                 }
                 "LLEN" => {
-                    let size = llen_handle(&args, &redisdb).await.unwrap();
-                    Value::Integer(size)
+                    llen_handle(&args, &redisdb).await.unwrap()
                 }
                 "LPOP" => {
-                    let value = lpop_handle(&args, &redisdb).await.unwrap();
-                    value
+                    lpop_handle(&args, &redisdb).await.unwrap()
+                }
+                "BLPOP" => {
+                    blpop_handle(&args, &redisdb).await.unwrap()
                 }
                 c => panic!("Cannot handle command {:?}",c)
             }

@@ -1,4 +1,4 @@
-use core::panic;
+use core::{f64, panic, time};
 use std::vec;
 
 use anyhow::{Error, Ok};
@@ -50,7 +50,7 @@ pub async fn set_handle(args: &Vec<String>, db: &db) -> Result<(), Error> {
     Ok(())
 }
 
-pub async fn rpush_handle(args: &Vec<String>, db: &db) -> Result<u32, Error> {
+pub async fn rpush_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     let key = args[0].clone();
     let mut list_values: Vec<String> = Vec::new();
     for i in 1..args.len() {
@@ -67,7 +67,7 @@ pub async fn rpush_handle(args: &Vec<String>, db: &db) -> Result<u32, Error> {
         lock.lists.insert(key, v.clone());
         v.len()
     };
-    Ok(v as u32)
+    Ok(Value::Integer(v as u32))
 }
 
 pub async fn lrange_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
@@ -98,7 +98,7 @@ pub async fn lrange_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> 
     }
 }
 
-pub async fn lpush_handle(args: &Vec<String>, db: &db) -> Result<u32, Error> {
+pub async fn lpush_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     let key = args[0].clone();
     let len = args.len();
     let mut list_values: Vec<String> = Vec::new();
@@ -116,9 +116,9 @@ pub async fn lpush_handle(args: &Vec<String>, db: &db) -> Result<u32, Error> {
         lock.lists.insert(key, v.clone());
         v.len()
     };
-    Ok(v as u32)
+    Ok(Value::Integer(v as u32))
 }
-pub async fn llen_handle(args: &Vec<String>, db: &db) -> Result<u32, Error> {
+pub async fn llen_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     let key = args[0].clone();
     let lock = db.state.lock().await;
     let list = lock.lists.get(&key);
@@ -128,7 +128,7 @@ pub async fn llen_handle(args: &Vec<String>, db: &db) -> Result<u32, Error> {
         }
         None => 0
     };
-    Ok(len as u32)
+    Ok(Value::Integer(len as u32))
 }
 pub async fn lpop_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     let args_len = args.len();
@@ -155,4 +155,28 @@ pub async fn lpop_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
         None => Value::NullBulkString
     };
     Ok(v)
+}
+pub async fn blpop_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
+    let key = args[0].clone();
+    let mut time_out = args[1].clone().parse::<f64>().unwrap();
+    let now = std::time::Instant::now();
+
+    if time_out == 0.0 {
+        time_out = f64::INFINITY;
+    }
+    
+    while now.elapsed().as_secs_f64() < time_out {
+        let mut lock = db.state.lock().await;
+        let list = match lock.lists.get_mut(&key) {
+            Some(l) => l,
+            None => continue
+        };
+        if list.len() == 0 {
+            continue;
+        } else {
+            let v = list.remove(0);
+            return Ok(Value::Array(vec![Value::BulkString(key), Value::BulkString(v)]));
+        }
+    }
+    Ok(Value::NullBulkString)
 }
