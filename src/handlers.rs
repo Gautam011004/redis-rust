@@ -3,7 +3,7 @@ use std::vec;
 
 use anyhow::{Error, Ok};
 
-use crate::{database::db, resp::Value};
+use crate::{database::{db, key_value}, resp::Value};
 
 pub fn extract_command(value: Value) -> Result<(String, Vec<Value>), Error>{
     match value {
@@ -58,13 +58,18 @@ pub async fn rpush_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     }
     let mut lock = db.state.lock().await;
     let mut v = Vec::new();
-    let v = if lock.lists.get(&key).is_some() {
-        let list = lock.lists.get_mut(&key).unwrap();
-        list.append(&mut list_values);
-        list.len()
+    let v = if lock.kv.get(&key).is_some() {
+        let list = match lock.kv.get_mut(&key).unwrap() {
+            key_value::List(list )=> {
+                list.append(&mut list_values);
+                list.len()
+            }
+            _ => panic!("rpush only for lists")
+        };
+        list
     } else {
         v.append(&mut list_values);
-        lock.lists.insert(key, v.clone());
+        lock.kv.insert(key, key_value::List(v.clone()));
         v.len()
     };
     Ok(Value::Integer(v as u32))
@@ -72,7 +77,11 @@ pub async fn rpush_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
 
 pub async fn lrange_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     let lock = db.state.lock().await;
-    let list = lock.lists.get(&args[0]);
+    let list = match lock.kv.get(&args[0]) {
+        Some(key_value::List(l )) => Some(l),
+        None => None,
+        _ => panic!("lrange not supported for the given key")
+    };
     let start = args[1].parse::<isize>().unwrap();
     let end = args[2].parse::<isize>().unwrap();
     match list {
@@ -107,13 +116,18 @@ pub async fn lpush_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     }
     let mut lock = db.state.lock().await;
     let mut v = Vec::new();
-    let v = if lock.lists.get(&key).is_some() {
-        let list = lock.lists.get_mut(&key).unwrap();
-        list.append(&mut list_values);
-        list.len()
+    let v = if lock.kv.get(&key).is_some() {
+        let len = match lock.kv.get_mut(&key).unwrap() {
+            key_value::List(list) => {
+                list.append(&mut list_values);
+                list.len()
+            }
+            _ => panic!("Only lists")
+        };
+        len
     } else {
         v.append(&mut list_values);
-        lock.lists.insert(key, v.clone());
+        lock.kv.insert(key, key_value::List(v.clone()));
         v.len()
     };
     Ok(Value::Integer(v as u32))
@@ -121,12 +135,12 @@ pub async fn lpush_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
 pub async fn llen_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     let key = args[0].clone();
     let lock = db.state.lock().await;
-    let list = lock.lists.get(&key);
+    let list = lock.kv.get(&key);
     let len = match list {
-        Some(list) => {
+        Some(key_value::List(list)) => {
             list.len()
         }
-        None => 0
+        _ => 0
     };
     Ok(Value::Integer(len as u32))
 }
@@ -135,9 +149,9 @@ pub async fn lpop_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     let key = args[0].clone();
     let element_count = if args_len > 1 { args[1].clone().parse::<usize>().unwrap() } else { 0 };
     let mut lock = db.state.lock().await;
-    let list = lock.lists.get_mut(&key);
+    let list = lock.kv.get_mut(&key);
     let v: Value = match list {
-        Some(list) => {
+        Some(key_value::List(list)) => {
             let len = list.len();
             if len == 0 { Value::NullBulkString }
             else { 
@@ -152,7 +166,7 @@ pub async fn lpop_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
                 }
             }
         }
-        None => Value::NullBulkString
+        _ => Value::NullBulkString
     };
     Ok(v)
 }
@@ -167,9 +181,9 @@ pub async fn blpop_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     
     while now.elapsed().as_secs_f64() < time_out {
         let mut lock = db.state.lock().await;
-        let list = match lock.lists.get_mut(&key) {
-            Some(l) => l,
-            None => continue
+        let list = match lock.kv.get_mut(&key) {
+            Some(key_value::List(l)) => l,
+            _ => continue
         };
         if list.len() == 0 {
             continue;
@@ -179,4 +193,23 @@ pub async fn blpop_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
         }
     }
     Ok(Value::NullBulkString)
+}
+
+pub async fn type_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
+    let key = args[0].clone();
+    let lock = db.state.lock().await;
+    let value = lock.kv.get(&key);
+
+    let s = match value {
+        Some(l ) => match l {
+            key_value::List(_) => {
+                Value::SimpleString("list".to_string())
+            },
+            key_value::String(_) => {
+                Value::SimpleString("string".to_string())
+            }
+        }
+        None => Value::SimpleString("none".to_string())
+    };
+    Ok(s)
 }
