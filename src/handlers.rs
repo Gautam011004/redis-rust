@@ -1,5 +1,5 @@
 use core::{f64, panic, time};
-use std::{collections::HashMap, time::SystemTime, vec};
+use std::{collections::{BTreeMap, HashMap}, hash::Hash, time::SystemTime, vec};
 
 use anyhow::{Error, Ok};
 
@@ -133,9 +133,9 @@ pub async fn lpush_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     Ok(Value::Integer(v as u32))
 }
 pub async fn llen_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
-    let key = args[0].clone();
+    let key = &args[0];
     let lock = db.state.lock().await;
-    let list = lock.kv.get(&key);
+    let list = lock.kv.get(key);
     let len = match list {
         Some(key_value::List(list)) => {
             list.len()
@@ -196,9 +196,9 @@ pub async fn blpop_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
 }
 
 pub async fn type_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
-    let key = args[0].clone();
+    let key = &args[0];
     let lock = db.state.lock().await;
-    let value = lock.kv.get(&key);
+    let value = lock.kv.get(key);
 
     let s = match value {
         Some(l ) => match l {
@@ -229,13 +229,18 @@ pub async fn xadd_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     };
     let len = args.len();
     let mut lock = db.state.lock().await;
-    let last = match lock.kv.get(&key) {
-        Some(key_value::Stream(s)) => Some(s),
-        _ => None
-    };
-    let (last_ms, last_sq) = match last {
-        Some(s) => s.0.split_once("-").unwrap(),
-        None => ("0", "0")
+    let last = match lock
+                                                                .kv
+                                                                .entry(key.clone())
+                                                                        .or_insert_with(|| key_value::Stream(BTreeMap::<String, HashMap<String, String>>::new())){
+                                                                            key_value::Stream(s) => s,
+                                                                            _ => panic!("Error only supports streams")
+                                                                        };
+    let (last_ms, last_sq) = if last.is_empty() {
+        ("0","0")
+    } else {
+        let t = last.last_key_value().unwrap();
+        t.0.split_once("-").unwrap()
     };
     if &args[1] == "*" && last_ms == ms {
          id = ms.to_owned() + "-" + &(last_sq.parse::<u32>().unwrap() + 1).to_string()
@@ -246,6 +251,21 @@ pub async fn xadd_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     for i in (2..len).step_by(2) {
         s.insert(args[i].clone(), args[i+1].clone());
     }
-    lock.kv.insert(key, key_value::Stream((id.clone(), s)));
+    last.insert(id.clone(), s);
     Ok(Value::BulkString(id))
 }
+// pub async fn xrange_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
+//     let key = &args[0];
+//     let start = &args[1];
+//     let end = &args[2];
+
+//     let lock = db.state.lock().await;
+//     let stream = match lock.kv.get(key) {
+//         Some(s) => match s {
+//             key_value::Stream(l) => l,
+//             _ => panic!("Only streams are supported for this cmd")
+//         }
+//         None => return Ok(Value::BulkError("Key not found".to_string()))
+//     }
+
+// }
