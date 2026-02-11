@@ -219,8 +219,23 @@ pub async fn type_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
 pub async fn xadd_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     let key = args[0].clone();
     let id = args[1].clone();
+    if id == "0-0" {
+        panic!("Error min valid redis ID is 0-1")
+    }
+    let (millisectime, sequence_number) = id.split_once("-").unwrap();
     let len = args.len();
     let mut lock = db.state.lock().await;
+    let last = match lock.kv.get(&key) {
+        Some(key_value::Stream(s)) => Some(s),
+        _ => None
+    };
+    let (last_millisectime, last_sequence_number) = match last {
+        Some(s) => s.0.split_once("-").unwrap(),
+        None => ("0", "0")
+    };
+    if millisectime < last_millisectime || millisectime == last_millisectime && sequence_number <= last_sequence_number {
+        panic!("Error the ID specified is equal or less than the last id")
+    }
     let mut s = HashMap::new();
     for i in (2..len).step_by(2) {
         s.insert(args[i].clone(), args[i+1].clone());
