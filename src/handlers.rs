@@ -1,5 +1,5 @@
 use core::{f64, panic, time};
-use std::{collections::HashMap, vec};
+use std::{collections::HashMap, time::SystemTime, vec};
 
 use anyhow::{Error, Ok};
 
@@ -218,23 +218,29 @@ pub async fn type_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
 }
 pub async fn xadd_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     let key = args[0].clone();
-    let id = args[1].clone();
-    if id == "0-0" {
+    let mut id = args[1].clone();
+    let (ms, sq)  = if id == "0-0" {
         panic!("Error min valid redis ID is 0-1")
-    }
-    let (millisectime, sequence_number) = id.split_once("-").unwrap();
+    } else if id == "*" {
+        id = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis().to_string() + "-0";
+        id.split_once("-").unwrap()
+    } else {
+        id.split_once("-").unwrap()
+    };
     let len = args.len();
     let mut lock = db.state.lock().await;
     let last = match lock.kv.get(&key) {
         Some(key_value::Stream(s)) => Some(s),
         _ => None
     };
-    let (last_millisectime, last_sequence_number) = match last {
+    let (last_ms, last_sq) = match last {
         Some(s) => s.0.split_once("-").unwrap(),
         None => ("0", "0")
     };
-    if millisectime < last_millisectime || millisectime == last_millisectime && sequence_number <= last_sequence_number {
-        panic!("Error the ID specified is equal or less than the last id")
+    if &args[1] == "*" && last_ms == ms {
+         id = ms.to_owned() + "-" + &(last_sq.parse::<u32>().unwrap() + 1).to_string()
+    } else if (last_ms, last_sq) >= (ms, sq) {
+        panic!("Error the ID is equal to less than the previous entry")
     }
     let mut s = HashMap::new();
     for i in (2..len).step_by(2) {
