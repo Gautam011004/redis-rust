@@ -8,7 +8,7 @@ use tokio::{sync::Mutex, time::sleep};
 pub enum key_value {
     String(String),
     List(Vec<String>),
-    Stream(BTreeMap<String, HashMap<String, String>>)
+    Stream(BTreeMap<(u128, u128), HashMap<String, String>>)
 }
 pub struct dbstate {
     pub kv: HashMap<String, key_value>,

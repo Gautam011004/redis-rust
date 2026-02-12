@@ -222,28 +222,30 @@ pub async fn xadd_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     let (ms, sq)  = if id == "0-0" {
         panic!("Error min valid redis ID is 0-1")
     } else if id == "*" {
-        id = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis().to_string() + "-0";
-        id.split_once("-").unwrap()
+        let newms = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
+        id = newms.to_string() + "-0";
+        (newms, 0)
     } else {
-        id.split_once("-").unwrap()
+        let (m, s) = id.split_once("-").unwrap();
+        (m.parse::<u128>().unwrap(), s.parse::<u128>().unwrap())
     };
     let len = args.len();
     let mut lock = db.state.lock().await;
     let last = match lock
                                                                 .kv
                                                                 .entry(key.clone())
-                                                                        .or_insert_with(|| key_value::Stream(BTreeMap::<String, HashMap<String, String>>::new())){
-                                                                            key_value::Stream(s) => s,
-                                                                            _ => panic!("Error only supports streams")
-                                                                        };
+                                                                .or_insert_with(|| key_value::Stream(BTreeMap::<(u128, u128), HashMap<String, String>>::new())){
+                                                                    key_value::Stream(s) => s,
+                                                                    _ => panic!("Error only supports streams")
+                                                                };
     let (last_ms, last_sq) = if last.is_empty() {
-        ("0","0")
+        (0,0)
     } else {
         let t = last.last_key_value().unwrap();
-        t.0.split_once("-").unwrap()
+        (t.0.0 , t.0.1)
     };
     if &args[1] == "*" && last_ms == ms {
-         id = ms.to_owned() + "-" + &(last_sq.parse::<u32>().unwrap() + 1).to_string()
+         id = ms.to_string() + "-" + &(last_sq + 1).to_string()
     } else if (last_ms, last_sq) >= (ms, sq) {
         panic!("Error the ID is equal to less than the previous entry")
     }
@@ -251,21 +253,40 @@ pub async fn xadd_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     for i in (2..len).step_by(2) {
         s.insert(args[i].clone(), args[i+1].clone());
     }
-    last.insert(id.clone(), s);
+    let (d,q) = id.split_once("-").unwrap();
+    let final_id = d.parse::<u128>().unwrap();
+    let final_seq = q.parse::<u128>().unwrap();
+    last.insert((final_id, final_seq), s);
     Ok(Value::BulkString(id))
 }
-// pub async fn xrange_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
-//     let key = &args[0];
-//     let start = &args[1];
-//     let end = &args[2];
+pub async fn xrange_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
+    let key = &args[0];
+    fn parse_id(s: &str, default_seq: u128) -> (u128, u128) {
+        match s.split_once('-') {
+            Some((ms, seq)) => (ms.parse().unwrap(), seq.parse().unwrap()),
+            None => (s.parse().unwrap(), default_seq),
+        }
+    }
+    
+    let (start_ms, start_sq) = parse_id(&args[1], 0);
+    let (end_ms, end_sq)   = parse_id(&args[2], u128::MAX);
 
-//     let lock = db.state.lock().await;
-//     let stream = match lock.kv.get(key) {
-//         Some(s) => match s {
-//             key_value::Stream(l) => l,
-//             _ => panic!("Only streams are supported for this cmd")
-//         }
-//         None => return Ok(Value::BulkError("Key not found".to_string()))
-//     }
-
-// }
+    let lock = db.state.lock().await;
+    let stream = match lock.kv.get(key) {
+        Some(s) => match s {
+            key_value::Stream(l) => l,
+            _ => panic!("Only streams are supported for this cmd")
+        }
+        None => return Ok(Value::BulkError("Key not found".to_string()))
+    };
+    let mut res = Vec::new();
+    for (id, field) in stream.range((start_ms, start_sq)..=(end_ms, end_sq)){
+        let mut values = Vec::new();
+        for i in field {
+            values.push(Value::BulkString(i.0.to_string()));
+            values.push(Value::BulkString(i.1.to_string()));
+        }
+        res.push(Value::Array(vec![Value::BulkString(id.0.to_string() + "-" + &id.1.to_string()), Value::Array(values)]));
+    }
+    Ok(Value::Array(res))
+}
