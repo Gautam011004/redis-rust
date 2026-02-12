@@ -262,9 +262,14 @@ pub async fn xadd_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
 pub async fn xrange_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
     let key = &args[0];
     fn parse_id(s: &str, default_seq: u128) -> (u128, u128) {
+        println!("{:?}", s);
         match s.split_once('-') {
-            Some((ms, seq)) => (ms.parse().unwrap(), seq.parse().unwrap()),
-            None => (s.parse().unwrap(), default_seq),
+            Some((ms, seq)) => (ms.parse().unwrap_or(default_seq), seq.parse().unwrap_or(default_seq)),
+            None => if s == "+" {
+                (default_seq, default_seq)
+            } else {
+                (s.parse::<u128>().unwrap(), default_seq)
+            }
         }
     }
     
