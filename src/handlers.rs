@@ -295,3 +295,35 @@ pub async fn xrange_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> 
     }
     Ok(Value::Array(res))
 }
+pub async fn xread_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
+    let key = &args[1];
+    let id = args[2].clone();
+    let (start_ms, start_sq) = match id.split_once("-") {
+        Some((s,q)) => (s.parse::<u128>().unwrap(), q.parse::<u128>().unwrap() + 1),
+        None =>  (id.parse::<u128>().unwrap(), 1)
+    };
+    let (end_ms, end_sq) = (u128::MAX, u128::MAX);
+    let lock = db.state.lock().await;
+    let stream = match lock.kv.get(key) {
+        Some(s) => match s {
+            key_value::Stream(l) => l,
+            _ => panic!("Only streams are supported for this cmd")
+        }
+        None => return Ok(Value::BulkError("Key not found".to_string()))
+    };
+    let mut fin = Vec::new();
+    let mut res = Vec::new();
+    res.push(Value::BulkString(id));
+    let mut nes = Vec::new();
+    for (id, field) in stream.range((start_ms, start_sq)..=(end_ms, end_sq)){
+        let mut values = Vec::new();
+        for i in field {
+            values.push(Value::BulkString(i.0.to_string()));
+            values.push(Value::BulkString(i.1.to_string()));
+        }
+        nes.push(Value::Array(vec![Value::BulkString(id.0.to_string() + "-" + &id.1.to_string()), Value::Array(values)]));
+    }
+    res.push(Value::Array(nes));
+    fin.push(Value::Array(res));
+    Ok(Value::Array(fin))
+}
