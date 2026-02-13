@@ -1,5 +1,5 @@
 use core::{f64, panic, time};
-use std::{collections::{BTreeMap, HashMap}, hash::Hash, time::SystemTime, vec};
+use std::{collections::{BTreeMap, HashMap}, hash::Hash, process::id, time::SystemTime, vec};
 
 use anyhow::{Error, Ok};
 
@@ -306,6 +306,7 @@ pub async fn xread_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
             ids.push(args[i].clone());
         }
     }
+    let lock = db.state.lock().await;
     let mut fin = Vec::new();
     for i in 0..keys.len(){
         let (start_ms, start_sq) = match ids[i].split_once("-") {
@@ -313,7 +314,6 @@ pub async fn xread_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
             None =>  (ids[i].parse::<u128>().unwrap(), 1)
         };
         let (end_ms, end_sq) = (u128::MAX, u128::MAX);
-        let lock = db.state.lock().await;
         let stream = match lock.kv.get(&keys[i]) {
             Some(s) => match s {
                 key_value::Stream(l) => l,
@@ -336,5 +336,60 @@ pub async fn xread_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
         res.push(Value::Array(nes));
         fin.push(Value::Array(res));
     };
+    Ok(Value::Array(fin))
+}
+pub async fn xread_block_handle(args: &Vec<String>, db: &db) -> Result<Value, Error> {
+    let mut timeout = args[1].clone().parse::<f64>().unwrap();
+    let len = args.len();
+    let mut keys = Vec::new();
+    let mut ids = Vec::new();
+    let now = std::time::Instant::now();
+    for i in 3..len{
+        if i <= (len+1)/2 {
+            keys.push(args[i].clone())
+        } else {
+            ids.push(args[i].clone());
+        }
+    }
+    println!("{:?}{:?}",keys,ids);
+    if timeout == 0.0 {
+        timeout = f64::INFINITY;
+    }
+    let mut fin = Vec::new();
+    while now.elapsed().as_secs_f64() < timeout {
+        let lock = db.state.lock().await;
+        for i in 0..keys.len(){
+            let (start_ms, start_sq) = match ids[i].split_once("-") {
+                Some((s,q)) => (s.parse::<u128>().unwrap(), q.parse::<u128>().unwrap() + 1),
+                None =>  (ids[i].parse::<u128>().unwrap(), 1)
+            };
+            let (end_ms, end_sq) = (u128::MAX, u128::MAX);
+            let stream = match lock.kv.get(&keys[i]) {
+                Some(s) => match s {
+                    key_value::Stream(l) => l,
+                    _ => panic!("Only streams are supported for this cmd")
+                }
+                None => continue
+            };
+            let mut res = Vec::new();
+            res.push(Value::BulkString(keys[i].clone()));
+            let mut nes = Vec::new();
+            for (id, field) in stream.range((start_ms, start_sq)..=(end_ms, end_sq)){
+                let mut values = Vec::new();
+                for i in field {
+                    values.push(Value::BulkString(i.0.to_string()));
+                    values.push(Value::BulkString(i.1.to_string()));
+                }
+                nes.push(Value::Array(vec![Value::BulkString(id.0.to_string() + "-" + &id.1.to_string()), Value::Array(values)]));
+            }
+            res.push(Value::Array(nes));
+            fin.push(Value::Array(res));
+        };
+        if fin.len() == 1 {
+            return Ok(Value::Array(fin))
+        } else {
+            continue;
+        }
+    }
     Ok(Value::Array(fin))
 }
