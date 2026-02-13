@@ -361,7 +361,11 @@ pub async fn xread_block_handle(args: &Vec<String>, db: &db) -> Result<Value, Er
         for i in 0..keys.len(){
             let (start_ms, start_sq) = match ids[i].split_once("-") {
                 Some((s,q)) => (s.parse::<u128>().unwrap(), q.parse::<u128>().unwrap() + 1),
-                None =>  (ids[i].parse::<u128>().unwrap(), 1)
+                None =>  if ids[i] == "$"{
+                    (0, 0)
+                } else {
+                    (ids[i].parse::<u128>().unwrap(), 1)
+                }
             };
             let (end_ms, end_sq) = (u128::MAX, u128::MAX);
             let stream = match lock.kv.get(&keys[i]) {
